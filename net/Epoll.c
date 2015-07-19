@@ -12,7 +12,7 @@ const int MAXEVENTS = 1024;
 
 void epollInit(Epoll* epoll)
 {
-    epoll->epfd = epoll_create(1);
+    epoll->epfd = epoll_create(MAXEVENTS);
     assert(epoll->epfd >= 0);
     
     epoll->epoll_events = (struct epoll_event*)malloc(
