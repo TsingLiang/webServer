@@ -1,6 +1,8 @@
 #ifndef SOCKET_H
 #define SOCKET_H
 
+#define DEBUG
+
 #include <stdbool.h>
 #include <stddef.h>
 

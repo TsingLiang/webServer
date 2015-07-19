@@ -1,20 +1,23 @@
 #ifndef EPOLL_H
 #define EPOLL_H
 
-#include <time.h>
+#define DEBUG
 
-Event;
+#include <time.h>
+#include "Event.h"
+#include <stdbool.h>
+
 struct timeval;
 struct epoll_event;
 
-typedef struct _epoll
+typedef struct Epoll
 {
     int epfd;
     struct epoll_event* epoll_events;
     int nevents;
 
     int nfds;
-    Event* events;
+    Event** events;
     bool run;
 }Epoll;
 

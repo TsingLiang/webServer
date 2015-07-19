@@ -29,7 +29,12 @@ int tcpListen(int port)
     }
     
     listen(acceptor, LISTENQ);
-    
+
+#ifdef DEBUG
+	char local[25];
+	printf("listen in %s\n", toIpPort(&addr, local, sizeof(local)));
+#endif
+	
     return acceptor;
 }
 

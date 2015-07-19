@@ -1,47 +1,49 @@
 #ifndef EVENT_H
 #define EVENT_H
 
-typedef void (*readCallback)(void* arg);
-typedef void (*writeCallback)(void *arg);
+struct Epoll;
 
-typedef _event
+typedef void (*readCallback)(struct Epoll* epoll, void* arg);
+typedef void (*writeCallback)(struct Epoll* epoll, void *arg);
+
+typedef struct Event
 {
-    int sockfd;
+    int fd;
     short events;
     readCallback readCb;
-    writeCallBack writeCb;
+    writeCallback writeCb;
 }Event;
 
-#define setFd(Event* event, int sockfd) \
+#define setFd(event, sockfd) \
 do                                      \
 {                                       \
     (event)->fd = sockfd;               \
 }while(0)                               
 
-#define getFd(Event* event) ((event)->fd)
+#define getFd(event) ((event)->fd)
 
-#define setEvents(Event* event, short events)   \
+#define setEvents(event, _events)   \
 do                                              \
 {                                               \
-    (event)->events = events;                   \
+    (event)->events = _events;                   \
 }while(0)                                   
 
-#define getEvents(Event* event) ((event)->events)
+#define getEvents(event) ((event)->events)
 
-#define setReadCallback(Event* event, readCallback readCb)  \
+#define setReadCallback(event, cb)  \
 do                                                          \
 {                                                           \
-    (event)->readCb = readCb;                               \
+    (event)->readCb = cb;                               \
 }while(0)   
 
-#define getReadCallback(Event* event) ((event)->readCallback)
+#define getReadCallback(event) ((event)->readCallback)
 
-#define setWriteCallback(Event* event, writeCallback writeCb)   \
+#define setWriteCallback(event, cb)   \
 do                                                              \
 {                                                               \
-    (event)->writeCb = writeCb;                                 \
+    (event)->writeCb = cb;                                 \
 }while(0)                                   
 
-#define getWriteCallback(Event* event) ((event)->writeCallback)
+#define getWriteCallback(event) ((event)->writeCallback)
 
 #endif
