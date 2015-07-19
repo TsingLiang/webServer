@@ -22,10 +22,28 @@ do                                      \
 
 #define getFd(event) ((event)->fd)
 
-#define setEvents(event, _events)   \
+#define enableRead(event)   \
 do                                              \
 {                                               \
-    (event)->events = _events;                   \
+    (event)->events |= EPOLLIN;                   \
+}while(0)                                   
+
+#define enableWrite(event)   \
+do                                              \
+{                                               \
+    (event)->events |= EPOLLOUT;                   \
+}while(0)                                   
+
+#define disableRead(event)   \
+do                                              \
+{                                               \
+    (event)->events &= ~EPOLLIN;                   \
+}while(0)                                   
+
+#define disableWrite(event)   \
+do                                              \
+{                                               \
+    (event)->events &= ~EPOLLOUT;                   \
 }while(0)                                   
 
 #define getEvents(event) ((event)->events)

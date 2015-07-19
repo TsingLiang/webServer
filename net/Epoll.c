@@ -41,7 +41,11 @@ void epollAdd(Epoll* epoll, Event* event)
     ev.events = event->events;
     ev.data.ptr = event;
     epoll->events[fd] = event;
-    epoll_ctl(epoll->epfd, fd, EPOLL_CTL_ADD, &ev);
+	if(epoll_ctl(epoll->epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+	{
+		perror("epoll add error:");
+		exit(0);
+	}
 }
 
 void epollDelete(Epoll* epoll, Event* event)
