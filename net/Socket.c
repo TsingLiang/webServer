@@ -9,6 +9,8 @@
 #include <netinet/tcp.h>
 #include <assert.h>
 
+#define DEBUG
+
 const int LISTENQ = 1024;
 
 int tcpListen(int port)
