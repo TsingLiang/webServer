@@ -1,5 +1,6 @@
 #include "Epoll.h"
 #include "Event.h"
+#include "EventLoop.h"
 #include <string.h>
 #include <sys/epoll.h>
 #include <sys/time.h>
@@ -10,7 +11,7 @@
 
 const int MAXEVENTS = 1024;
 
-void epollInit(Epoll* epoll)
+void epollInit(struct Epoll* epoll)
 {
     epoll->epfd = epoll_create(MAXEVENTS);
     assert(epoll->epfd >= 0);
@@ -20,25 +21,36 @@ void epollInit(Epoll* epoll)
     assert(epoll->epoll_events != NULL);
     epoll->nevents = MAXEVENTS;
     
-    epoll->events = (Event**)malloc(MAXEVENTS * sizeof(Event*));
+    epoll->events = (struct Event**)malloc(MAXEVENTS * sizeof(struct Event*));
     assert(epoll->events != NULL);
-    memset(epoll->events, 0, MAXEVENTS * sizeof(Event*));
+    memset(epoll->events, 0, MAXEVENTS * sizeof(struct Event*));
     epoll->nfds = MAXEVENTS;
     
     epoll->run = false;        
 }
 
-void epollAdd(Epoll* epoll, Event* event)
+void epollAdd(struct Epoll* epoll, struct Event* event)
 {
     assert(epoll != NULL);
-    assert(getFd(event) >= 0);
-    
-    int fd = getFd(event);
+    assert(event->fd >= 0);
+  
+    int fd = event->fd;
+#ifdef DEBUG
+	printf("epoll add event: fd = %d\n", fd);
+#endif
+
+
     if(fd > epoll->nfds)
         return;
 
     struct epoll_event ev;
-    ev.events = event->events;
+	ev.events = 0;	
+
+	if(event->type & EV_READ)
+		ev.events |= EPOLLIN;
+	if(event->type & EV_WRITE)
+		ev.events |= EPOLLOUT;
+
     ev.data.ptr = event;
     epoll->events[fd] = event;
 	if(epoll_ctl(epoll->epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
@@ -48,23 +60,28 @@ void epollAdd(Epoll* epoll, Event* event)
 	}
 }
 
-void epollDelete(Epoll* epoll, Event* event)
+void epollDelete(struct Epoll* epoll, struct Event* event)
 {
     assert(epoll != NULL);
-    assert(getFd(event) >= 0);
+    assert(event->fd >= 0);
     
-    int fd = getFd(event);
+    int fd = event->fd;
     if(fd > epoll->nfds)
         return;
 
     struct epoll_event ev;
-    ev.events = event->events;
-    ev.data.ptr = event;
+	ev.events = 0;
+   	if(ev.events & EV_READ)
+		ev.events |= EV_READ;
+	if(ev.events & EV_WRITE)
+		ev.events |= EV_WRITE;
+
+	ev.data.ptr = event;
     epoll->events[fd] = NULL;
     epoll_ctl(epoll->epfd, fd, EPOLL_CTL_DEL, &ev);
 }
 
-void epollDispatch(Epoll* epoll, time_t msecond)
+void epollDispatch(struct Epoll* epoll, time_t msecond)
 {
     assert(epoll != NULL);
  
@@ -83,8 +100,8 @@ void epollDispatch(Epoll* epoll, time_t msecond)
 
         for(i = 0; i < nready; i++)
         {
-            Event* event = (Event*)events[i].data.ptr;
-            int sockfd = getFd(event);
+            struct Event* event = (struct Event*)events[i].data.ptr;
+            int sockfd = event->fd;
         
             if(events[i].events & EPOLLIN)
             {
@@ -92,8 +109,8 @@ void epollDispatch(Epoll* epoll, time_t msecond)
                 printf("in epollDispatch: fd = %d, readCallback\n", 
                     sockfd);
 #endif                
-                if(event->readCb != NULL);
-                    event->readCb(epoll, event);       
+                if(event->readCb != NULL)
+                    event->readCb(event->loop, event);       
             }
             else if(events[i].events & EPOLLOUT)
             {
@@ -101,15 +118,15 @@ void epollDispatch(Epoll* epoll, time_t msecond)
                 printf("in epollDispatch: fd = %d, writeCallback\n", 
                     sockfd);
 #endif                
-                if(event->writeCb != NULL);
-                    event->writeCb(epoll, event);       
+                if(event->writeCb != NULL)
+                    event->writeCb(event->loop, event);       
             }
         }
     }
     
 }
 
-void epollClose(Epoll* epoll)
+void epollClose(struct Epoll* epoll)
 {
     assert(epoll != NULL);
 

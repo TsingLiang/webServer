@@ -1,14 +1,12 @@
 #include "EventLoop.h"
+#include "Epoll.h"
+#include "Event.h"
+#include "SignalEvent.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
 
-
-static char table[3][10] = {"EV_IO", 
-							"EV_SIGNAL",
-							"EV_TIMER"};
-
-void EventLoopInit(EventLoop* loop)
+void eventLoopInit(struct EventLoop* loop)
 {
 	assert(loop != NULL);
 
@@ -16,26 +14,27 @@ void EventLoopInit(EventLoop* loop)
 	printf("event loop init.\n");
 #endif
 
-	loop->epoll = (Epoll*)malloc(sizeof(Epoll));
+	loop->epoll = (struct Epoll*)malloc(sizeof(struct Epoll));
 	assert(loop->epoll != NULL);
-	EpollInit(loop->epoll);
+	epollInit(loop->epoll);
 	
-	loop->sevent = (SignalEvent*)malloc(sizeof(SignalEvent));
+	loop->sevent = (struct SignalEvent*)malloc(sizeof(struct SignalEvent));
 	assert(loop->sevent != NULL);
-	signalInit(loop->sevent, loop->epoll);
+	signalInit(loop->sevent, loop);
 }
 
-void EventLoopAdd(EventLoop* loop, enum EventType type, Event* event)
+void eventLoopAdd(struct EventLoop* loop, struct Event* event)
 {
 	assert(loop != NULL && event != NULL);
 
 #ifdef DEBUG
-	printf("event loop add: type = %s\n", table[type]);
+	printf("event loop add: type = %d\n", event->type);
 #endif	
 	
-	switch(type)
+	switch(event->type)
 	{
-		case EV_IO:
+		case EV_READ:
+		case EV_WRITE:
 			epollAdd(loop->epoll, event);
 			break;
 		
@@ -52,17 +51,18 @@ void EventLoopAdd(EventLoop* loop, enum EventType type, Event* event)
 	}
 }
 
-void EventLoopDel(EventLoop* loop, enum EventType type, Event* event)
+void eventLoopDel(struct EventLoop* loop, struct Event* event)
 {
 	assert(loop != NULL && event != NULL);
 
 #ifdef DEBUG
-	printf("event loop  delete: type = %s\n", table[type]);
+	printf("event loop  delete: type = %d\n", event->type);
 #endif	
 	
-	switch(type)
+	switch(event->type)
 	{
-		case EV_IO:
+		case EV_READ:
+		case EV_WRITE:
 			epollDelete(loop->epoll, event);
 			break;
 		
@@ -79,14 +79,14 @@ void EventLoopDel(EventLoop* loop, enum EventType type, Event* event)
 	}	
 }
 
-void EventLoopDispatch(EventLoop* loop)
+void eventLoopDispatch(struct EventLoop* loop)
 {
 	assert(loop != NULL);
 	
 	epollDispatch(loop->epoll, -1);
 }
 
-void EventLoopClose(EventLoop* loop)
+void eventLoopClose(struct EventLoop* loop)
 {
 	assert(loop != NULL);
 

@@ -4,27 +4,27 @@
 #define DEBUG
 
 #include <time.h>
-#include "Event.h"
 #include <stdbool.h>
 
 struct timeval;
 struct epoll_event;
+struct Event;
 
-typedef struct Epoll
+struct Epoll
 {
     int epfd;
     struct epoll_event* epoll_events;
     int nevents;
 
     int nfds;
-    Event** events;
+	struct Event** events;
     bool run;
-}Epoll;
+};
 
-void epollInit(Epoll* epoll);
-void epollAdd(Epoll* epoll, Event* event);
-void epollDelete(Epoll* epoll, Event* event);
-void epollDispatch(Epoll* epoll, time_t msecond);
-void epollClose(Epoll* epoll);
+void epollInit(struct Epoll* epoll);
+void epollAdd(struct Epoll* epoll, struct Event* event);
+void epollDelete(struct Epoll* epoll, struct Event* event);
+void epollDispatch(struct Epoll* epoll, time_t msecond);
+void epollClose(struct Epoll* epoll);
 
 #endif

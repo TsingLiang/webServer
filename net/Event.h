@@ -1,67 +1,20 @@
 #ifndef EVENT_H
 #define EVENT_H
 
-struct Epoll;
+struct EventLoop;
 
-typedef void (*readCallback)(struct Epoll* epoll, void* arg);
-typedef void (*writeCallback)(struct Epoll* epoll, void *arg);
+typedef void (*readCallback)(struct EventLoop* loop, void* arg);
+typedef void (*writeCallback)(struct EventLoop* loop, void *arg);
 
-typedef struct Event
+struct Event
 {
     int fd;
-    short events;
+    int type;
     readCallback readCb;
     writeCallback writeCb;
-}Event;
+	struct EventLoop* loop;
+};
 
-#define setFd(event, sockfd) \
-do                                      \
-{                                       \
-    (event)->fd = sockfd;               \
-}while(0)                               
-
-#define getFd(event) ((event)->fd)
-
-#define enableRead(event)   \
-do                                              \
-{                                               \
-    (event)->events |= EPOLLIN;                   \
-}while(0)                                   
-
-#define enableWrite(event)   \
-do                                              \
-{                                               \
-    (event)->events |= EPOLLOUT;                   \
-}while(0)                                   
-
-#define disableRead(event)   \
-do                                              \
-{                                               \
-    (event)->events &= ~EPOLLIN;                   \
-}while(0)                                   
-
-#define disableWrite(event)   \
-do                                              \
-{                                               \
-    (event)->events &= ~EPOLLOUT;                   \
-}while(0)                                   
-
-#define getEvents(event) ((event)->events)
-
-#define setReadCallback(event, cb)  \
-do                                                          \
-{                                                           \
-    (event)->readCb = cb;                               \
-}while(0)   
-
-#define getReadCallback(event) ((event)->readCallback)
-
-#define setWriteCallback(event, cb)   \
-do                                                              \
-{                                                               \
-    (event)->writeCb = cb;                                 \
-}while(0)                                   
-
-#define getWriteCallback(event) ((event)->writeCallback)
-
+struct Event* newEvent(int fd, int type, readCallback readCb, 
+						writeCallback writeCb, struct EventLoop* loop);
 #endif

@@ -5,22 +5,23 @@
 
 #include <sys/signalfd.h>
 #include <signal.h>
-#include "Event.h"
-#include "Epoll.h"
 
-typedef struct SignalEvent
+struct Event;
+struct EventLoop;
+
+struct SignalEvent
 {
 	int sigfd;
 	sigset_t mask;
 	struct signalfd_siginfo sigInfo;
-	Event* event;
-	Event** events;
-	Epoll* epoll;
-}SignalEvent;
+	struct Event* event;
+	struct Event** events;
+	struct EventLoop* loop;
+};
 
-void signalInit(SignalEvent* sevent, Epoll* epoll);
-void signalAdd(SignalEvent* sevent, Event* event);
-void signalDelete(SignalEvent* sevent, Event* event);
-void signalClose(SignalEvent* sevent);
+void signalInit(struct SignalEvent* sevent, struct EventLoop* loop);
+void signalAdd(struct SignalEvent* sevent, struct Event* event);
+void signalDel(struct SignalEvent* sevent, struct Event* event);
+void signalClose(struct SignalEvent* sevent);
 
 #endif

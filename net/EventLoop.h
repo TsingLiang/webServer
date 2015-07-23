@@ -1,29 +1,28 @@
 #ifndef EVENTLOOP_H
 #define EVENTLOOP_H
 
-#include "Epoll.h"
-#include "SignalEvent.h"
-#include "Event.h"
-
 #define DEBUG
 
-typedef struct EventLoop
-{
-	Epoll* epoll;
-	SignalEvent* sevent;
-}EventLoop;
+struct Epoll;
+struct SignalEvent;
+struct Event;
 
-enum EventType
+#define	EV_READ  	1
+#define	EV_WRITE  	2
+#define	EV_SIGNAL  	4
+#define	EV_TIMER  	8
+
+struct EventLoop
 {
-	EV_IO,
-	EV_SIGNAL,
-	EV_TIMER
+	struct Epoll* epoll;
+	struct SignalEvent* sevent;
 };
 
-void EventLoopInit(EventLoop* loop);
-void EventLoopAdd(EventLoop* loop, enum EventType type, Event* event);
-void EventLoopDel(EventLoop* loop, enum EventType type, Event* event);
-void EventLoopDispatch(EventLoop* loop);
-void EventLoopClose(EventLoop* loop);
+
+void eventLoopInit(struct EventLoop* loop);
+void eventLoopAdd(struct EventLoop* loop,  struct Event* event);
+void eventLoopDel(struct EventLoop* loop,  struct Event* event);
+void eventLoopDispatch(struct EventLoop* loop);
+void eventLoopClose(struct EventLoop* loop);
 
 #endif

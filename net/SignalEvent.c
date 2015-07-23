@@ -1,4 +1,7 @@
 #include "SignalEvent.h"
+#include "Event.h"
+#include "EventLoop.h"
+#include <sys/epoll.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -7,11 +10,11 @@
 
 const int NSIGNALS = 32;
 
-void signalHandler(Epoll* epoll, void* arg)
+void signalHandler(struct EventLoop* loop, void* arg)
 {
-	assert(epoll != NULL && arg != NULL);
+	assert(loop != NULL && arg != NULL);
 
-	SignalEvent* sevent = (SignalEvent*)arg;
+	struct SignalEvent* sevent = loop->sevent;
 	size_t n = read(sevent->sigfd, &sevent->sigInfo, 
 					sizeof(sevent->sigInfo));
 	assert(n == sizeof(sevent->sigInfo));
@@ -24,32 +27,32 @@ void signalHandler(Epoll* epoll, void* arg)
 	printf("handle signal event: signo = %d\n", signo);
 #endif
 		
-	Event* event = sevent->events[signo];
-	event->readCb(epoll, event);	
+	struct Event* event = sevent->events[signo];
+	event->readCb(loop, event);	
 }
 
-void signalInit(SignalEvent* sevent, Epoll* epoll)
+void signalInit(struct SignalEvent* sevent, struct EventLoop* loop)
 {
-	assert(sevent != NULL && epoll != NULL);
+	assert(sevent != NULL && loop != NULL);
 	
-	sevent->epoll = epoll;
+	sevent->loop = loop;
+	struct Epoll* epoll = loop->epoll;
 
 	sigemptyset(&sevent->mask);
 	assert(sigprocmask(SIG_BLOCK, &sevent->mask, NULL) >= 0);
 
-	sevent->sigfd = signalfd(SIG_BLOCK, &sevent->mask, 0);
+	sevent->sigfd = signalfd(-1, &sevent->mask, 0);
 	assert(sevent->sigfd >= 0);
 	setNonBlock(sevent->sigfd);
 
-	sevent->event = (Event*)malloc(sizeof(Event));
+	sevent->event = newEvent(sevent->sigfd, EV_READ, 
+					signalHandler, NULL, loop);
 	assert(sevent->event != NULL);
-	setFd(sevent->event, sevent->sigfd);
-	setReadCallback(sevent->event, signalHandler);
 	epollAdd(epoll, sevent->event);
 
-	sevent->events = (Event**)malloc(NSIGNALS * sizeof(Event*));
+	sevent->events = (struct Event**)malloc(NSIGNALS * sizeof(struct Event*));
 	assert(sevent->events != NULL);
-	memset(sevent->events, 0, NSIGNALS * sizeof(Event*));
+	memset(sevent->events, 0, NSIGNALS * sizeof(struct Event*));
 
 #ifdef DEBUG
 	printf("signal event init.\n");
@@ -57,35 +60,35 @@ void signalInit(SignalEvent* sevent, Epoll* epoll)
 
 }
 
-void signalAdd(SignalEvent* sevent, Event* event)
+void signalAdd(struct SignalEvent* sevent, struct Event* event)
 {
 	assert(sevent != NULL && event != NULL);	
 #ifdef DEBUG
-	printf("signal add: signum = %d\n", getFd(event));
+	printf("signal add: signum = %d\n", event->fd);
 #endif
-	sigaddset(&sevent->mask, getFd(event));
+	sigaddset(&sevent->mask, event->fd);
 	assert(sigprocmask(SIG_BLOCK, &sevent->mask, NULL) >= 0);
 	assert(signalfd(sevent->sigfd, &sevent->mask, 0) >= 0);
 
-	assert(sevent->events[getFd(event)] == NULL);
-	sevent->events[getFd(event)] = event;	
+	assert(sevent->events[event->fd] == NULL);
+	sevent->events[event->fd] = event;	
 }
 
-void signalDelete(SignalEvent* sevent, Event* event)
+void signalDel(struct SignalEvent* sevent, struct Event* event)
 {
 	assert(sevent != NULL && event != NULL);	
 #ifdef DEBUG
-	printf("signal delete: signum = %d\n", getFd(event));
+	printf("signal delete: signum = %d\n", event->fd);
 #endif
-	sigdelset(&sevent->mask, getFd(event));
+	sigdelset(&sevent->mask, event->fd);
 	assert(sigprocmask(SIG_BLOCK, &sevent->mask, NULL) >= 0);
 	assert(signalfd(sevent->sigfd, &sevent->mask, 0) >= 0);
 
-	assert(sevent->events[getFd(event)] != NULL);
-	sevent->events[getFd(event)] = NULL;	
+	assert(sevent->events[event->fd] != NULL);
+	sevent->events[event->fd] = NULL;	
 }
 
-void signalClose(SignalEvent* sevent)
+void signalClose(struct SignalEvent* sevent)
 {
 	assert(sevent != NULL);
 #ifdef DEBUG
