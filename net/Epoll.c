@@ -39,7 +39,6 @@ void epollAdd(struct Epoll* epoll, struct Event* event)
 	printf("epoll add event: fd = %d\n", fd);
 #endif
 
-
     if(fd > epoll->nfds)
         return;
 
@@ -52,8 +51,12 @@ void epollAdd(struct Epoll* epoll, struct Event* event)
 		ev.events |= EPOLLOUT;
 
     ev.data.ptr = event;
-    epoll->events[fd] = event;
-	if(epoll_ctl(epoll->epfd, EPOLL_CTL_ADD, fd, &ev) < 0)
+	int ctl = EPOLL_CTL_ADD;
+	if(epoll->events[fd] != NULL)
+		ctl = EPOLL_CTL_MOD;
+	else
+    	epoll->events[fd] = event;
+	if(epoll_ctl(epoll->epfd, ctl, fd, &ev) < 0)
 	{
 		perror("epoll add error:");
 		exit(0);
