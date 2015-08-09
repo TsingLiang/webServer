@@ -108,8 +108,13 @@ void setTimer(struct BufferEvent* bevent, time_t msec)
 {
 	assert(bevent != NULL);
 
+	bevent->event->type |= EV_TIMER;
 	bevent->timer = newTimer(bevent->event, msec);
-	bevent->timer->arg = bevent;	
+	bevent->timer->arg = bevent;
+
+#ifdef DEBUG
+	printf("after new timer.\n");
+#endif
 	timerAdd(bevent->loop->tevent, bevent->timer);
 }
 
@@ -117,6 +122,10 @@ void freeBufferEvent(struct BufferEvent* bevent)
 {
 	if(bevent == NULL)	
 		return;
+
+#ifdef DEBUG
+	printf("free a buffer event!\n");
+#endif
 
 	if(bevent->input != NULL)
 		freeBuffer(bevent->input);
@@ -126,7 +135,8 @@ void freeBufferEvent(struct BufferEvent* bevent)
 
 	if(bevent->timer != NULL)
 	{
-		timerDel(bevent->loop->tevent, bevent->timer);
+		if(bevent->event->type & EV_TIMER)
+			timerDel(bevent->loop->tevent, bevent->timer);
 		free(bevent->timer);
 	}
 

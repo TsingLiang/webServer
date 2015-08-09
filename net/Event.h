@@ -1,10 +1,12 @@
 #ifndef EVENT_H
 #define EVENT_H
 
-struct EventLoop;
+#include <time.h>
 
-typedef void (*readCallback)(struct EventLoop* loop, void* arg);
-typedef void (*writeCallback)(struct EventLoop* loop, void *arg);
+struct Event;
+
+typedef void (*readCallback)(struct Event* event, void* arg);
+typedef void (*writeCallback)(struct Event* event, void *arg);
 
 struct Event
 {
@@ -12,9 +14,12 @@ struct Event
     int type;
     readCallback readCb;
     writeCallback writeCb;
+	void* arg;
+
 	struct EventLoop* loop;
 };
 
 struct Event* newEvent(int fd, int type, readCallback readCb, 
-						writeCallback writeCb, struct EventLoop* loop);
+					writeCallback writeCb, void* arg, struct EventLoop* loop);
+
 #endif

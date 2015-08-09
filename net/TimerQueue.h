@@ -3,26 +3,31 @@
 
 #include <stdbool.h>
 #include <time.h>
+#include <stdint.h>
+#include <sys/time.h>
 
 #define DEBUG
 
 struct EventLoop;
+struct Event;
 typedef void (*timeoutCallback)(struct EventLoop* loop, void* arg);
 
 struct Timer
 {
 	struct Event* event;
 	timeoutCallback timeCb;
-	time_t start;
-	time_t interval;
+	void* arg;
+	struct timeval expire;
 	int index;
 };
+
 struct TimerQueue
 {
 	struct Timer** timers;
 	int size;
 	int capacity;
 };
+int timeCmp(struct timeval left, struct timeval right);
 
 struct TimerQueue* newTimerQueue();
 void push(struct TimerQueue* queue, struct Timer* timer);

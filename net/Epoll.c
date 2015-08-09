@@ -72,16 +72,19 @@ void epollDelete(struct Epoll* epoll, struct Event* event)
     if(fd > epoll->nfds)
         return;
 
-    struct epoll_event ev;
-	ev.events = 0;
-   	if(ev.events & EV_READ)
-		ev.events |= EV_READ;
-	if(ev.events & EV_WRITE)
-		ev.events |= EV_WRITE;
+	struct epoll_event ev;
+	ev.events = 0;	
 
-	ev.data.ptr = event;
+	if(event->type & EV_READ)
+		ev.events |= EPOLLIN;
+	if(event->type & EV_WRITE)
+		ev.events |= EPOLLOUT;
+
+    ev.data.ptr = event;
+	
     epoll->events[fd] = NULL;
     epoll_ctl(epoll->epfd, fd, EPOLL_CTL_DEL, &ev);
+	close(fd);
 }
 
 void epollDispatch(struct Epoll* epoll, time_t msecond)
@@ -98,12 +101,13 @@ void epollDispatch(struct Epoll* epoll, time_t msecond)
     {
         struct epoll_event* events = epoll->epoll_events;
         int nready = epoll_wait(epoll->epfd, 
-        events, epoll->nevents, msecond);
+        						events, epoll->nevents, msecond);
 		int i;
 
         for(i = 0; i < nready; i++)
         {
             struct Event* event = (struct Event*)events[i].data.ptr;
+			assert(event != NULL);
             int sockfd = event->fd;
         
             if(events[i].events & EPOLLIN)
@@ -113,7 +117,7 @@ void epollDispatch(struct Epoll* epoll, time_t msecond)
                     sockfd);
 #endif                
                 if(event->readCb != NULL)
-                    event->readCb(event->loop, event);       
+                    event->readCb(event, event->arg);       
             }
             else if(events[i].events & EPOLLOUT)
             {
@@ -122,7 +126,7 @@ void epollDispatch(struct Epoll* epoll, time_t msecond)
                     sockfd);
 #endif                
                 if(event->writeCb != NULL)
-                    event->writeCb(event->loop, event);       
+                    event->writeCb(event, event->arg);       
             }
         }
     }

@@ -11,7 +11,8 @@ static void shiftUp(struct TimerQueue* queue, int i)
 
 	int parent = i / 2;
 
-	while(parent >= 1 && queue->timers[i]->start < queue->timers[parent]->start)
+	while(parent >= 1 && 
+		timeCmp(queue->timers[i]->expire, queue->timers[parent]->expire) < 0)
 	{
 		struct Timer* timer = queue->timers[i];
 		queue->timers[i] = queue->timers[parent];
@@ -36,11 +37,11 @@ static void shiftDown(struct TimerQueue* queue, int i)
 		left = i * 2;
 		right = i * 2 + 1;
 
-		if(queue->timers[left]->start < queue->timers[i]->start)
+		if(timeCmp(queue->timers[left]->expire, queue->timers[i]->expire) < 0)
 			min = left;
 
 		if(right <= queue->size && 
-			queue->timers[right]->start < queue->timers[min]->start)
+		timeCmp(queue->timers[right]->expire, queue->timers[min]->expire) < 0)
 			min = right;
 
 		if(min == i)
@@ -57,6 +58,10 @@ static void shiftDown(struct TimerQueue* queue, int i)
 static bool expand(struct TimerQueue* queue)
 {
 	assert(queue != NULL);
+
+#ifdef DEBUG
+	printf("expand timer queue!\n");
+#endif
 	
 	struct Timer** timers = (struct Timer**)realloc(queue->timers,
 					(queue->capacity * 2 + 1) * sizeof(struct Timer*));
@@ -67,6 +72,18 @@ static bool expand(struct TimerQueue* queue)
 	queue->capacity *= 2;
 
 	return true;
+}
+  
+int timeCmp(struct timeval left, struct timeval right)
+{
+	if(left.tv_sec > right.tv_sec || 
+		(left.tv_sec == right.tv_sec && left.tv_usec > right.tv_usec))
+		return 1;
+
+	if(left.tv_sec == right.tv_sec && left.tv_usec == right.tv_usec)
+		return 0;
+
+	return -1;	
 }
 
 struct TimerQueue* newTimerQueue()
@@ -96,8 +113,8 @@ void timerQueueDel(struct TimerQueue* queue, struct Timer* timer)
 	queue->size--;
 
 	int parent = timer->index / 2;
-	if(parent > 0 && queue->timers[parent]->start > 
-						queue->timers[timer->index]->start)
+	if(parent > 0 && timeCmp(queue->timers[parent]->expire,
+						queue->timers[timer->index]->expire))
 		shiftUp(queue, timer->index);
 	else 
 		shiftDown(queue, timer->index);
@@ -118,6 +135,10 @@ void push(struct TimerQueue* queue, struct Timer* timer)
 	queue->timers[++queue->size] = timer;
 	timer->index = queue->size;
 	shiftUp(queue, queue->size);
+#ifdef DEBUG
+	printf("push timer: size = %d\n", queue->size);
+#endif
+
 }
 
 struct Timer* top(struct TimerQueue* queue)
@@ -134,7 +155,10 @@ struct Timer* pop(struct TimerQueue* queue)
 	struct Timer* timer = queue->timers[1];
 	queue->timers[1] = queue->timers[queue->size];
 	queue->size--;
-	
+
+#ifdef DEBUG
+	printf("pop timer: size = %d\n", queue->size);
+#endif	
 	shiftDown(queue, 1);
 	
 	return timer;
@@ -145,4 +169,15 @@ bool empty(struct TimerQueue* queue)
 	return queue->size == 0;
 }
 
+void timerQueueClose(struct TimerQueue* queue)
+{
+	assert(queue != NULL);
 
+	int i;
+	for(i = 0; i <= queue->size; i++)
+	{
+		free(queue->timers[i]);
+	}
+
+	free(queue);
+}

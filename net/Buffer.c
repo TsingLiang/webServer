@@ -116,6 +116,29 @@ int bufferWrite(struct Buffer* buffer, int fd)
 	return nwrite;
 }
 
+void bufferSwap(struct Buffer* buffer1, struct Buffer* buffer2)
+{
+	if(buffer1 == NULL || buffer2 == NULL)
+		return;
+
+	char* buf = buffer1->buf;
+	buffer1->buf = buffer2->buf;
+	buffer2->buf = buf;
+
+	int rindex = buffer1->rindex;
+	buffer1->rindex = buffer2->rindex;
+	buffer2->rindex = rindex;
+	
+	int windex = buffer1->windex;
+	buffer1->windex = buffer2->windex;
+	buffer2->windex = windex;
+	
+	int capacity = buffer1->capacity;
+	buffer1->capacity = buffer2->capacity;
+	buffer2->capacity = capacity;
+}
+
+
 char* readLine(struct Buffer* buffer)
 {
 	if(buffer == NULL || buffer->rindex >= buffer->windex)

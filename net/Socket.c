@@ -18,7 +18,9 @@ int tcpListen(int port)
     struct sockaddr_in addr;
     int acceptor = socket(AF_INET, SOCK_STREAM, 0);
     assert(acceptor > 0);
-    
+   
+	setReuseAddr(acceptor, true);
+ 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET; 
     addr.sin_port = htons(port);

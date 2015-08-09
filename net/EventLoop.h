@@ -6,6 +6,7 @@
 struct Epoll;
 struct SignalEvent;
 struct Event;
+struct TimerEvent;
 
 #define	EV_READ  	1
 #define	EV_WRITE  	2
@@ -16,8 +17,8 @@ struct EventLoop
 {
 	struct Epoll* epoll;
 	struct SignalEvent* sevent;
+	struct TimerEvent* tevent;
 };
-
 
 void eventLoopInit(struct EventLoop* loop);
 void eventLoopAdd(struct EventLoop* loop,  struct Event* event);

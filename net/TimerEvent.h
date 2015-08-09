@@ -1,6 +1,8 @@
 #ifndef TIMEREVENT_H
 #define TIMEREVENT_H
 
+#include <time.h>
+
 #define DEBUG
 
 struct EventLoop;
@@ -21,4 +23,5 @@ void timerAdd(struct TimerEvent* tevent, struct Timer* timer);
 void timerDel(struct TimerEvent* tevent, struct Timer* timer);
 void timerClose(struct TimerEvent* tevent);
 	
+struct Timer* newTimer(struct Event* event, time_t timeout);
 #endif
