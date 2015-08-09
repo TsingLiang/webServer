@@ -9,6 +9,7 @@ struct BufferEvent;
 struct Event;
 struct EventLoop;
 struct Buffer;
+struct Timer;
 
 typedef void (*bufferCb)(struct BufferEvent* bevent, void* arg);
 
@@ -24,9 +25,8 @@ struct BufferEvent
 	bufferCb writeCb;
 	bufferCb errorCb;
 
-	time_t rtimeout;
-	time_t wtimeout;
-	
+	struct Timer* timer;
+
 	void *arg;
 };
 	
@@ -35,8 +35,7 @@ struct BufferEvent* newBufferEvent(struct EventLoop* loop, int fd,
 void enableRead(struct BufferEvent* bevent);
 void enableWrite(struct BufferEvent* bevent);
 void disableWrite(struct BufferEvent* bevent);
-void setReadTimeout(struct BufferEvent* bevent, time_t msec);
-void setWriteTimeout(struct BufferEvent* bevent, time_t msec);
+void setTimer(struct BufferEvent* bevent, time_t msec);
 void freeBufferEvent(struct BufferEvent* bevent);
 
 #endif

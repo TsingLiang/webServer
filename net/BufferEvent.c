@@ -2,13 +2,15 @@
 #include "EventLoop.h"
 #include "BufferEvent.h"
 #include "Buffer.h"
+#include "TimerEvent.h"
+#include "TimerQueue.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 
-static void onRead(struct EventLoop* loop, void* arg)
+static void onRead(struct Event* event, void* arg)
 {
 	struct BufferEvent* bevent = (struct BufferEvent*)arg;
 	struct Buffer* input = bevent->input;
@@ -17,11 +19,11 @@ static void onRead(struct EventLoop* loop, void* arg)
 	int n = bufferRead(input, fd);
 	if(n > 0 && bevent->readCb != NULL)
 		bevent->readCb(bevent, bevent->arg);
-	else if(n <= 0)
+	else if(n <= 0 && bevent->errorCb != NULL)
 		bevent->errorCb(bevent, bevent->arg);
 }
 
-static void onWrite(struct EventLoop* loop, void* arg)
+static void onWrite(struct Event* event, void* arg)
 {
 	struct BufferEvent* bevent = (struct BufferEvent*)arg;
 	struct Buffer* output = bevent->output;
@@ -56,13 +58,12 @@ struct BufferEvent* newBufferEvent(struct EventLoop* loop, int fd,
 	bevent->writeCb = writeCb;
 	bevent->errorCb = defaultErrorCb;
 	bevent->arg = arg;
-	bevent->rtimeout = 0;
-	bevent->wtimeout = 0;
+	bevent->timer = NULL;
 
 	bevent->input = newBuffer();
 	bevent->output = newBuffer();
 
-	bevent->event = newEvent(fd, 0, onRead, onWrite, loop);
+	bevent->event = newEvent(fd, 0, onRead, onWrite, bevent, loop);
 	
 	return bevent;
 }
@@ -76,7 +77,7 @@ void enableRead(struct BufferEvent* bevent)
 	assert(event != NULL && loop != NULL);
 
 	event->type |= EV_READ;	
-	EventLoopAdd(loop, event);
+	eventLoopAdd(loop, event);
 }
 
 void enableWrite(struct BufferEvent* bevent)
@@ -88,7 +89,7 @@ void enableWrite(struct BufferEvent* bevent)
 	assert(event != NULL && loop != NULL);
 
 	event->type |= EV_WRITE;	
-	EventLoopAdd(loop, event);
+	eventLoopAdd(loop, event);
 }
 
 void disableWrite(struct BufferEvent* bevent)
@@ -99,32 +100,41 @@ void disableWrite(struct BufferEvent* bevent)
 	struct EventLoop* loop = bevent->loop;
 	assert(event != NULL && loop != NULL);
 
-	EventLoopDel(loop, event);
-	event->type &= ~EV_WRITE;	
+	event->type &= ~EV_WRITE;
+	eventLoopAdd(loop, event);
 }
 
-void setReadTimeout(struct BufferEvent* bevent, time_t msec)
+void setTimer(struct BufferEvent* bevent, time_t msec)
 {
+	assert(bevent != NULL);
+
+	bevent->timer = newTimer(bevent->event, msec);
+	bevent->timer->arg = bevent;	
+	timerAdd(bevent->loop->tevent, bevent->timer);
 }
-void setWriteTimeout(struct BufferEvent* bevent, time_t msec)
-{
-}
+
 void freeBufferEvent(struct BufferEvent* bevent)
 {
 	if(bevent == NULL)	
 		return;
-	
-	if(bevent->event != NULL)
-	{
-		eventLoopDel(bevent->loop, bevent->event);
-		free(bevent->event);
-	}
 
 	if(bevent->input != NULL)
 		freeBuffer(bevent->input);
 
 	if(bevent->output != NULL)
 		freeBuffer(bevent->output);
+
+	if(bevent->timer != NULL)
+	{
+		timerDel(bevent->loop->tevent, bevent->timer);
+		free(bevent->timer);
+	}
+
+	if(bevent->event != NULL)
+	{
+		eventLoopDel(bevent->loop, bevent->event);
+		free(bevent->event);
+	}
 
 	free(bevent);
  }
