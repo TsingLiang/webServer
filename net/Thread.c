@@ -1,7 +1,12 @@
 #include "Thread.h"
+#include "Event.h"
+#include "EventLoop.h"
+#include "BufferEvent.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
 
 struct ConnQueue* newConnQueue()
 {
@@ -26,6 +31,7 @@ void offer(struct ConnQueue* queue, int sockfd)
 	struct conn* conn = (struct conn*)malloc(sizeof(struct conn));
 	assert(conn != NULL);
 	conn->next = NULL;
+	conn->sockfd = sockfd;
 	if(queue->head == NULL)
 	{
 		queue->head = queue->tail = conn;	
@@ -72,7 +78,7 @@ void freeConnQueue(struct ConnQueue* queue)
 {
 	while(!empty(queue))
 	{
-		free(getFirst(queue));
+		close(poll(queue));
 	}
 
 	pthread_mutex_destroy(&queue->lock);

@@ -10,10 +10,11 @@
 
 const int NSIGNALS = 32;
 
-void signalHandler(struct EventLoop* loop, void* arg)
+void signalHandler(struct Event* event, void* arg)
 {
-	assert(loop != NULL && arg != NULL);
+	assert(event != NULL);
 
+	struct EventLoop* loop = event->loop;
 	struct SignalEvent* sevent = loop->sevent;
 	size_t n = read(sevent->sigfd, &sevent->sigInfo, 
 					sizeof(sevent->sigInfo));
@@ -27,8 +28,8 @@ void signalHandler(struct EventLoop* loop, void* arg)
 	printf("handle signal event: signo = %d\n", signo);
 #endif
 		
-	struct Event* event = sevent->events[signo];
-	event->readCb(loop, event);	
+	struct Event* events = sevent->events[signo];
+	events->readCb(events, events->arg);	
 }
 
 void signalInit(struct SignalEvent* sevent, struct EventLoop* loop)
@@ -46,7 +47,7 @@ void signalInit(struct SignalEvent* sevent, struct EventLoop* loop)
 	setNonBlock(sevent->sigfd);
 
 	sevent->event = newEvent(sevent->sigfd, EV_READ, 
-					signalHandler, NULL, loop);
+					signalHandler, NULL, NULL, loop);
 	assert(sevent->event != NULL);
 	epollAdd(epoll, sevent->event);
 
