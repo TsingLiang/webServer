@@ -14,9 +14,10 @@
 #include "Logger.h"
 
 //for response
+static const char* HTTP_VERSION = "HTTP/1.0";
 static const char* SERVER = "webServer/0.1 ubuntu/10.04 (linux)";
 static const char* HTML = "text/html";
-static const char* GIF = "";
+static const char* GIF = "gif/";
 
 //for cgi
 static const char* CGI_PATH = "/usr/local/bin:/usr/bin";
@@ -43,10 +44,12 @@ static void parseFirstLine(struct httpConnection* conn);
 static void parseHeader(struct httpConnection* conn);
 
 //response http request
-static void addHeader(struct httpConnection* conn);
+static void preResponse(struct httpConnection* conn);
+static void addGeneralHeader(struct httpConnection* conn);
 static void doFile(struct httpConnection* conn);
 static void doDir(struct httpConnection* conn);
 static void doCgi(struct httpConnection* conn);
+static void sendResponse(struct httpConnection* conn);
 static void sendError(struct httpConnection* conn);
 static char** makeArgp();
 static char** makeEnvp();
@@ -90,7 +93,11 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 				doCgi(conn);
 				break;
 
-			case HTTP_ERROR:
+			case SEND_RESPONSE:
+				sendResponse(conn);
+				break;
+
+			case SEND_ERROR:
 				sendError(conn);
 				break;
 
@@ -319,42 +326,284 @@ static void parseHeader(struct httpConnection* conn)
 			request->acceptLanguage = p;
 		}
 	}
-			
+	
+	conn->state = PRE_RESPONSE;		
 }
 
-void addHeader(struct httpConnection* conn)
+void preResponse(struct httpConnection* conn)
 {
 	assert(conn != NULL);
 
 	struct httpRequest* request = conn->request;
 	assert(request != NULL);
 	
-	char* method = request->method;
-	assert(method != NULL);
-	if(strcasecmp(method, "GET") == 0)
-	{
-		struct 		
-	}
-	else if(strcasecmp(method, "HEAD") == 0)
-	{
+	char* url = request->url;
+	char  path[256];
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
 
-	}
-	else if(strcasecmp(method, "POST") == 0)
-	{
-	}
-	else
+	int n = strlen(setting->document);
+	if(setting->document[n - 1] == '/')
+		setting->document[n - 1] = '\0';
+
+	snprintf(path, sizeof(path) - 1, "%s%s", url);
+		
+	struct state st;
+			
+	if(stat(path, &st) < 0)
 	{
 		conn->state = SEND_ERROR;
-		conn->errorCode = BAD_REQUEST;
+		conn->errorCode = NOT_FOUND;
+			
+		return;
+	}
+		
+	if(S_ISDIR(st.st_mode))
+	{
+		conn->state = DO_DIR;
+			
+		return;
+	}
+
+	char* p = path + strlen(path);
+	if(	*--p == 'i' && *--p == 'g' 
+	 && *--p == 'c' && *--p == '.')
+	{
+		conn->state = DO_CGI;
+			
+		return;
+	}
+
+	conn->state = DO_FILE;
+}
+
+void addGeneralHeader(struct httpConnection* conn)
+{
+	assert(conn != NULL);
+
+	struct Buffer* output = conn->bevent->output;
+	assert(output != NULL);
+
+	bufferPrintf(output, "Server: %s\r\n", SERVER);
+	bufferPrintf(output, "Accept: %s;%s\r\n", HTML, GIF);
+		
+
+	time_t now = time(NULL);
+	char* timeStr = ctime(&now);	
+	
+	bufferPrintf(output, "Date: %s\r\n", timeStr);
+	
+	free(timeStr);
+}
+
+void doFile(struct httpConnection* conn)
+{
+	assert(conn != NULL);
+
+	struct httpRequest* request = conn->request;
+	assert(request != NULL);
+	
+	char* url = request->url;
+	char  path[256];
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+
+	int n = strlen(setting->document);
+	if(setting->document[n - 1] == '/')
+		setting->document[n - 1] = '\0';
+
+	snprintf(path, sizeof(path) - 1, "%s%s", url);
+	
+	int fd = open(path, O_RDONLY);
+	if(fd < 0)
+	{
+		extern int errno;
+		LogError("open() %s error: %s\n", strerror(errno));
+
+		conn->state = SEND_ERROR;
+		conn->errorCode = FORBIDDEN;
+		
+		return;
+	}
+	
+	struct Buffer* output = conn->bevent->output;
+	assert(output != NULL);
+	bufferPrintf(output, "%s 200 OK\r\n", HTTP_VERSION);
+	bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+	bufferPrintf(output, "Content-type: text/html\r\n");
+	addGeneralHeader(conn);
+	
+	bufferRead(output, fd);
+	
+	close(fd);	
+
+	conn->state = SEND_RESPONSE;
+}
+
+void doDir(struct httpConnection* conn)
+{
+	assert(conn != NULL);
+
+	struct httpRequest* request = conn->request;
+	assert(request != NULL);
+	
+	char* url = request->url;
+	char  path[256];
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+
+	int n = strlen(setting->document);
+	if(setting->document[n - 1] == '/')
+		setting->document[n - 1] = '\0';
+
+	snprintf(path, sizeof(path) - 1, "%s%sindex.html", url);
+	
+	int fd = open(path, O_RDONLY);
+	if(fd < 0)
+	{
+		extern int errno;
+		LogError("open() %s error: %s\n", strerror(errno));
+
+		conn->state = SEND_ERROR;
+		conn->errorCode = FORBIDDEN;
+		
+		return;
+	}
+	
+	struct Buffer* output = conn->bevent->output;
+	assert(output != NULL);
+	bufferPrintf(output, "%s 200 OK\r\n", HTTP_VERSION);
+	bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+	bufferPrintf(output, "Content-type: text/html\r\n");
+	addGeneralHeader(conn);
+	
+	bufferRead(output, fd);
+	
+	close(fd);	
+
+	conn->state = SEND_RESPONSE;	
+}
+
+void doCgi(struct httpConnection* conn);
+void sendResponse(struct httpConnection* conn)
+{
+	assert(conn != NULL);
+
+	struct BufferEvent* bevent = conn->bevent;
+	int sockfd = bevent->event->fd;
+	assert(sockfd >= 0);
+	
+	struct Buffer* output = bevent->output;
+	
+	bufferWrite(output, sockfd);
+	
+	if(buffer->rindex < buffer->windex)
+	{
+		enableWrite(bevent);
+	
+		return;
 	}
 }
 
-static void doFile(struct httpConnection* conn);
-static void doDir(struct httpConnection* conn);
-static void doCgi(struct httpConnection* conn);
-static void sendError(struct httpConnection* conn);
-static char** makeArgp();
-static char** makeEnvp();
+void sendError(struct httpConnection* conn)
+{
+	assert(conn != NULL);
+
+	int errorCode = conn->errorCode;
+	struct Buffer* output = conn->bevent->output;
+	switch(errorCode)
+	{
+		case BAD_REQUEST:
+			bufferPrintf(output, "%s 400 Bad Request\n", HTTP_VERSION);
+			bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+			bufferPrintf(output, "Content-type: text/html\r\n");
+			addGeneralHeader(conn);
+			bufferPrintf(output, 
+				"<html>\n"
+				"<head>\n"
+				"<title>Bad Request</title>\n"
+				"</head>\n"
+				"<body>\n"
+				"Bad file name.\n"
+				"</body>\n"
+				"</html>\n");
+			break;
+		
+		case NOT_FOUND:
+			bufferPrintf(output, "%s 404 Not Found\n", HTTP_VERSION);
+			bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+			bufferPrintf(output, "Content-type: text/html\r\n");
+			addGeneralHeader(conn);
+			bufferPrintf(output, 
+				"<html>\n"
+				"<head>\n"
+				"<title>Not Found</title>\n"
+				"</head>\n"
+				"<body>\n"
+				"File is not found.\n"
+				"</body>\n"
+				"</html>\n");
+			break;
+
+		case NOT_IMPLEMENTED:
+			bufferPrintf(output, "%s 501 Not Implemented\n", HTTP_VERSION);
+			bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+			bufferPrintf(output, "Content-type: text/html\r\n");
+			addGeneralHeader(conn);
+			bufferPrintf(output, 
+				"<html>\n"
+				"<head>\n"
+				"<title>Not Found</title>\n"
+				"</head>\n"
+				"<body>\n"
+				"That method is not implemented.\n"
+				"</body>\n"
+				"</html>\n");
+
+			break;
+
+		case FORBIDDEN:
+			bufferPrintf(output, "%s 403 Forbidden\n", HTTP_VERSION);
+			bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+			bufferPrintf(output, "Content-type: text/html\r\n");
+			addGeneralHeader(conn);
+			bufferPrintf(output, 
+				"<html>\n"
+				"<head>\n"
+				"<title>Forbidden</title>\n"
+				"</head>\n"
+				"<body>\n"
+				"File is protected.\n"
+				"</body>\n"
+				"</html>\n");
+			break;
+
+		case INTERNAL_ERROR:
+			bufferPrintf(output, "%s 500 Internal Error\n", HTTP_VERSION);
+			bufferPrintf(output, "Content-length: %u\r\n", st.st_size);
+			bufferPrintf(output, "Content-type: text/html\r\n");
+			addGeneralHeader(conn);
+			bufferPrintf(output, 
+				"<html>\n"
+				"<head>\n"
+				"<title>Internal Error</title>\n"
+				"</head>\n"
+				"<body>\n"
+				"Something unexpected went wrong.\n"
+				"</body>\n"
+				"</html>\n");
+
+			break;
+		
+		default:
+			break;
+	}
+
+	sendResponse(conn);
+}
+
+char** makeArgp();
+char** makeEnvp();
 
 struct httpConnection* newConnection(int sockfd, struct BufferEvent* bevent, 								struct httpServer* server, struct EventLoop* loop);
 {
