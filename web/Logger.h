@@ -36,9 +36,14 @@ struct Logger
 	pthread_t tid;
 	bool run;
 
+	char filePath[64];
 	int logFile;
-	int level;	
+	int level;
 	struct LogQueue* queue;
+
+	int thresh;
+	int logCount;
+	int fileCount;
 };
 
 void logOpen(const char* logFile, int level);
