@@ -486,7 +486,70 @@ void doDir(struct httpConnection* conn)
 
 void doCgi(struct httpConnection* conn)
 {
+	assert(conn != NULL);
 	
+	struct httpRequest* request = conn->request;
+	assert(reqeust != NULL);
+
+	if(	strcasecmp(request->method, "GET") != 0
+	 || strcasecmp(request->method, "POST") != 0)
+	{
+		conn->state = SEND_ERROR;
+		conn->errorCode = NOT_IMPLEMENT;	
+		
+		return;
+	}
+	
+	char** env = makeEnv(conn);
+	char*  args[2];
+	args[0] = request->url;
+	args[1] = NULL;
+
+	int cgi_input[2];
+	int cgi_output[2];
+
+	if(pipe(cgi_input) < 0 || pipe(cgi_output) < 0)
+	{
+		conn->state = SEND_ERROR;
+		conn->errorCode = INTERNAL_ERROR;
+	
+		free(env);
+
+		return;
+	}
+
+	pid_t pid = fork();
+	if(pid < 0)	
+	{
+		conn->state = SEND_ERROR;
+		conn->errorCode = INTERNAL_ERROR;
+	
+		free(env);
+
+		return ;
+	}
+	
+	if(pid == 0)
+	{
+		close(cgi_input[1]);	
+		close(cgi_output[0]);
+
+		exit(0);
+	}
+	
+	close(cgi_input[0]);
+	close(cgi_output[1]);
+
+	if(strcasecmp(request->method, "POST") == 0)
+		write(cgi_input[1], request->query, strlen(reqeust->query));
+	
+	struct Buffer* output = conn->bevent->output;
+	assert(output != NULL);
+	
+	bufferRead(output, cgi_output[0]);
+	conn->state = SEND_RESPONSE;	
+
+	free(env);
 }
 
 void sendResponse(struct httpConnection* conn)
