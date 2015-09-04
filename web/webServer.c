@@ -484,7 +484,11 @@ void doDir(struct httpConnection* conn)
 	conn->state = SEND_RESPONSE;	
 }
 
-void doCgi(struct httpConnection* conn);
+void doCgi(struct httpConnection* conn)
+{
+	
+}
+
 void sendResponse(struct httpConnection* conn)
 {
 	assert(conn != NULL);
@@ -602,8 +606,88 @@ void sendError(struct httpConnection* conn)
 	sendResponse(conn);
 }
 
-char** makeArgp();
-char** makeEnvp();
+char** makeEnv(struct httpConnection* conn)
+{
+	assert(server != NULL);
+
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+
+	assert(conn != NULL);
+
+	struct httpRequest* request = conn->request;
+	assert(reqeust != NULL);	
+
+	char** env = (char**)malloc(50 * sizeof(char*));
+	assert(env != NULL);
+
+	int envn = 0;
+	char buf[1024];
+	
+	snprintf(buf, sizeof(buf) - 1, "PATH=%s", CGI_PATH);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "LD_LIBRARY_PATH=%s", CGI_LD_LIBRARY_PATH);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "SERVER_SOFTWARE=%s", SERVER_SOFTWARE);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "SERVER_NAME=%s", SERVER_NAME);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "GATEWAY_INTERFACE=%s", GATEWAY_INTERFACE);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "SERVER_PROTOCOL=%s", SERVER_PROTOCOL);
+	env[envn++] = strdup(buf);
+	
+	snprintf(buf, sizeof(buf) - 1, "SERVER_PORT=%d", setting->);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "REQUEST_METHOD=%s", request->method);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "SCRIPT_NAME=%s", request->url);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "PATH_INFO=/%s", request->url);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "QUERY_STRING=%s", request->query);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "REMOTE_ADDR=%s", conn->remote);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "HTTP_REFERER=%s", request->referer);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "HTTP_REFERRER=%s", request->referrer);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "HTTP_USER_AGENT=%s", request->userAgent);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "HTTP_COOKIE=%s", request->cookie);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "HTTP_HOST=%s", request->host);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "CONTENT_TYPE=%s", request->contentType);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "CONTENT_LENGTH=%s", request->contentLength);
+	env[envn++] = strdup(buf);
+
+	snprintf(buf, sizeof(buf) - 1, "AUTH_TYPE=%s", AUTH_TYPE);
+	env[envn++] = strdup(buf);
+
+	env[envn] = NULL;
+
+	return env;
+}
 
 struct httpConnection* newConnection(int sockfd, struct BufferEvent* bevent, 								struct httpServer* server, struct EventLoop* loop);
 {
@@ -732,7 +816,7 @@ void startServer()
 
 void stopServer(struct httpServer* server)
 {
-
+	
 }
 
 void daemon()
