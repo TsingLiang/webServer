@@ -80,7 +80,7 @@ void epollDelete(struct Epoll* epoll, struct Event* event)
 	if(event->type & EV_WRITE)
 		ev.events |= EPOLLOUT;
 
-    ev.data.ptr = event;
+//    ev.data.ptr = event;
 	
     epoll->events[fd] = NULL;
     epoll_ctl(epoll->epfd, fd, EPOLL_CTL_DEL, &ev);
