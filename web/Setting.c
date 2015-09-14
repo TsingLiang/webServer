@@ -122,7 +122,7 @@ struct Setting* parseOpt(int argc, char* argv[])
 		if(root)
 			setting->root = root;
 		else
-			setting->root = "/usr/local/webServer";
+			setting->root = "/usr/git/";
 		
 		if(document)
 			setting->document = document;
@@ -143,6 +143,8 @@ struct Setting* parseOpt(int argc, char* argv[])
 		setting->nthreads = defaultThreads;
 		setting->daemon = daemon;	
 	}
+
+	setting->serverName = strdup("webServer");
 	
 	return setting;
 }
@@ -189,7 +191,7 @@ struct Setting* parseConf(const char* conf)
 		if(root)
 			setting->root = strdup(root->valuestring);
 		else
-			setting->root = "/usr/local/webServer";
+			setting->root = "/usr/git/";
 		
 		cJSON* document =  cJSON_GetObjectItem(directory, "document");
 		if(document)

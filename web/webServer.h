@@ -17,6 +17,7 @@ enum ConnectionState
 	DO_FILE,
 	DO_DIR,
 	DO_CGI,
+	ON_CGI,
 	
 	SEND_RESPONSE,
 	SEND_ERROR
@@ -52,6 +53,10 @@ struct httpRequest
 	char* userAgent;
 	char* accept;
 	char* acceptLanguage;
+	char* acceptEncoding;
+	char* acceptCharset;
+	char* keepAlive;
+	char* connection;
 };
 
 struct httpServer;
@@ -66,13 +71,18 @@ struct httpConnection
 	int state;
 
 	struct httpRequest* request;
-	int errorCode;	
+	int errorCode;
+	
+	struct BufferEvent* cgi;
+
+	char remote[25];	
 };
 
 struct httpServer
 {
 	int acceptor;
 	char hostport[25];
+	short port;
 	struct Server* server;
 	struct httpConnection** connMap;
 	int mapSize;

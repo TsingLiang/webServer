@@ -10,6 +10,7 @@
 enum LogLevel
 {
 	LOG_DEBUG,
+	LOG_INFO,
 	LOG_WARN,
 	LOG_ERROR
 };
@@ -52,10 +53,12 @@ void logPrintf(int level, const char* format, ...);
 
 
 #define LogDebug(format, args...)		\
-	logPrintf(DEBUG, format, ##args)
+	logPrintf(LOG_DEBUG, format, ##args)
+#define LogInfo(format, args...)		\
+	logPrintf(LOG_INFO, format, ##args)
 #define LogWarn(format, args...)		\
-	logPrintf(WARN, format, ##args)
+	logPrintf(LOG_WARN, format, ##args)
 #define LogError(format, args...)		\
-	logPrintf(ERROR, format, ##args)
+	logPrintf(LOG_ERROR, format, ##args)
 
 #endif

@@ -10,6 +10,7 @@ struct Setting
 
 	char* pidFile;
 	char* logFile;
+	int   logLevel;
 
 	char* serverName;		
 	int  listen;
