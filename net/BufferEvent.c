@@ -17,6 +17,10 @@ static void onRead(struct Event* event, void* arg)
 	int fd = bevent->event->fd;
 
 	int n = bufferRead(input, fd);
+
+#ifdef DEBUG
+	printf("read %d bytes.\n", n);
+#endif
 	if(n > 0 && bevent->readCb != NULL)
 		bevent->readCb(bevent, bevent->arg);
 	else if(n <= 0 && bevent->errorCb != NULL)
@@ -40,7 +44,15 @@ static void defaultErrorCb(struct BufferEvent* bevent, void* arg)
 {
 	assert(bevent != NULL);
 
+#ifdef DEBUG
+	printf("error callback, fd = %d.\n", bevent->event->fd);
+#endif
+
 	freeBufferEvent(bevent);
+
+#ifdef DEBUG
+	printf("after free buffer event.\n");
+#endif
 }
 
 struct BufferEvent* newBufferEvent(struct EventLoop* loop, int fd, 
@@ -136,15 +148,29 @@ void freeBufferEvent(struct BufferEvent* bevent)
 	if(bevent->timer != NULL)
 	{
 		if(bevent->event->type & EV_TIMER)
+		{
 			timerDel(bevent->loop->tevent, bevent->timer);
+			bevent->event->type &= ~EV_TIMER;
+		}
 		free(bevent->timer);
 	}
 
 	if(bevent->event != NULL)
 	{
 		eventLoopDel(bevent->loop, bevent->event);
+#ifdef DEBUG
+		printf("before free event.\n");
+#endif
 		free(bevent->event);
+#ifdef DEBUG
+		printf("after free event.\n");
+#endif
+
 	}
+
+#ifdef DEBUG
+	printf("free buffer.\n");
+#endif
 
 	free(bevent);
  }

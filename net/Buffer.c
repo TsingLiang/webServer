@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include <assert.h>
 
 static const int BUFFER_SIZE = 1024;
 
@@ -90,6 +92,29 @@ int bufferAddStr(struct Buffer* buffer, const void* data, int len)
 	return len;
 }
 
+
+int bufferPrintf(struct Buffer* buffer, const char* fmt, ...)
+{
+	assert(buffer != NULL);
+
+	va_list p;
+	va_start(p, fmt);
+
+	int n = vsnprintf(buffer->buf + buffer->windex, 
+					buffer->capacity - buffer->windex, fmt, p);	
+	while(buffer->windex == buffer->capacity)
+	{
+		bufferExpand(buffer);
+
+		n = vsnprintf(buffer->buf + buffer->windex, 
+					buffer->capacity - buffer->windex, fmt, p);	
+	}
+
+	va_end(p);
+
+	return n;
+}
+
 int bufferAddInt(struct Buffer* buffer, int n)
 {
 	if(buffer == NULL)
@@ -146,14 +171,26 @@ char* readLine(struct Buffer* buffer)
 
 	char *start = buffer->buf + buffer->rindex;
 	char *p = start;
-	while(*p != '\n' && *p != '\0')
+	while(*p != '\n' && *p != '\r' && *p != '\0')
 	{
 		p++;
 		buffer->rindex++;
-	}	
+	}
 
-	*p = '\0';
-	buffer->rindex++;
+	if(*p == '\n')	
+	{
+		*p = '\0';
+		buffer->rindex++;
+	}
+	else if(*p == '\r')
+	{
+		*p = '\0';
+		buffer->rindex += 2;
+	}
+	else
+	{
+		buffer->rindex++;
+	}
 
 	return start;
 }

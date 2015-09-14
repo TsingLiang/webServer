@@ -36,7 +36,8 @@ static void onNotify(struct Event* event, void* arg)
 					 server->onRead, server->onWrite, bevent);
 	assert(bevent != NULL);
 	enableRead(bevent);
-	setTimer(bevent, 6000);
+	//setTimer(bevent, 6000);
+	server->afterAccept(bevent, NULL);
 }
 
 static void* startThread(void* arg)

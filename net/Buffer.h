@@ -20,6 +20,7 @@ struct Buffer
 struct Buffer* newBuffer();
 int bufferRead(struct Buffer* buffer, int fd);
 int bufferAddStr(struct Buffer* buffer, const void* data, int len);
+int bufferPrintf(struct Buffer* buffer, const char* format, ...);
 int bufferAddInt(struct Buffer* buffer, int n);
 int bufferWrite(struct Buffer* buffer, int fd);
 void bufferSwap(struct Buffer* buffer1, struct Buffer* buffer2);

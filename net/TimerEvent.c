@@ -132,7 +132,7 @@ void timerDel(struct TimerEvent* tevent, struct Timer* timer)
 	struct TimerQueue* queue = tevent->queue;
 #ifdef DEBUG
 	printf("delete timer, index = %d\n", timer->index);
-	printf("queue: size = %d, capacity = %d", queue->size, queue->capacity);
+	printf("queue: size = %d, capacity = %d\n", queue->size, queue->capacity);
 #endif
 	assert(empty(queue) == false);
 
