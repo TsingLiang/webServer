@@ -22,8 +22,6 @@
 //for response
 static const char* HTTP_VERSION = "HTTP/1.0";
 static const char* SERVER = "webServer/0.1 ubuntu/10.04 (linux)";
-static const char* HTML = "text/html";
-static const char* GIF = "gif/";
 
 //for cgi
 static const char* CGI_PATH = "/usr/local/bin:/usr/bin";
@@ -34,6 +32,30 @@ static const char* SERVER_NAME = "ubuntu/10.04 (linux)";
 static const char* GATEWAY_INTERFACE = "CGI/1.1";
 static const char* SERVER_PROTOCOL = "HTTP/1.0";
 static const char* AUTH_TYPE = "Basic";
+
+
+static const char* states[] = {
+								"disconnected"
+								, "connected"
+								, "parse first line"
+								, "parse header"
+								, "pre response"
+								, "do file"
+								, "do dir"
+								, "do cgi"
+								, "on cgi"
+								, "send response"
+								, "send error"
+												};
+
+static const char* errorCodes[] = {
+									  "http ok"
+									, "bad request"
+									, "not found"
+									, "not implemented"
+									, "forbidden"
+									, "internal error"
+													};
 
 //connection map initial size
 static const int CONN_INIT_SIZE = 1024;
@@ -77,7 +99,7 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 	{
 
 #ifdef DEBUG
-		printf("connection state = %d.\n", conn->state);
+		printf("connection state: %s.\n", states[conn->state]);
 #endif
 		switch(conn->state)
 		{
@@ -116,7 +138,9 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 			default:
 				break;
 		}
-	}	
+	}
+	
+	freeConnection(conn);	
 }
 
 void onConnection(struct BufferEvent* bevent, void* arg)
@@ -128,7 +152,7 @@ void onConnection(struct BufferEvent* bevent, void* arg)
 	char peer[25];
 
 #ifdef DEBUG
-	printf("%s -> %s\n", getPeerAddr(connfd, peer, sizeof(peer)),
+	printf("new connection:%s -> %s\n", getPeerAddr(connfd, peer, sizeof(peer)),
 						getLocalAddr(connfd, local, sizeof(local)));
 #endif
 	
@@ -197,6 +221,10 @@ static void parseFirstLine(struct httpConnection* conn)
 		return ;
 	}
 
+#ifdef DEBUG
+	printf("method: %s\n", request->method);
+#endif
+
 	request->url = p;
 	p = strchr(p, ' ');
 	if(p == NULL)
@@ -209,6 +237,10 @@ static void parseFirstLine(struct httpConnection* conn)
 
 	while(*p == ' ')
 		*p++ = '\0';
+
+#ifdef DEBUG
+	printf("url: %s\n", request->url);
+#endif
 
 	request->query = strchr(request->url, '?');
 	if(request->query != NULL)
@@ -361,8 +393,13 @@ void preResponse(struct httpConnection* conn)
 	int n = strlen(setting->document);
 	if(setting->document[n - 1] == '/')
 		setting->document[n - 1] = '\0';
-
-	snprintf(path, sizeof(path) - 1, "%s%s", setting->document, url);
+	
+	snprintf(path, sizeof(path) - 1, "%s%s%s", setting->root, 
+							setting->document, url);
+	
+#ifdef DEBUG
+	printf("path: %s\n", path);
+#endif
 		
 	struct stat st;
 			
@@ -373,7 +410,9 @@ void preResponse(struct httpConnection* conn)
 			
 		return;
 	}
-		
+	
+	request->path = strdup(path);
+	
 	if(S_ISDIR(st.st_mode))
 	{
 		conn->state = DO_DIR;
@@ -408,7 +447,7 @@ void addGeneralHeader(struct httpConnection* conn)
 	
 	bufferPrintf(output, "Date: %s\r\n", timeStr);
 	
-	free(timeStr);
+	//free(timeStr);
 }
 
 void doFile(struct httpConnection* conn)
@@ -419,23 +458,19 @@ void doFile(struct httpConnection* conn)
 	assert(request != NULL);
 	
 	char* url = request->url;
-	char  path[256];
-	struct Setting* setting = server->setting;
-	assert(setting != NULL);
-
-	int n = strlen(setting->document);
-	if(setting->document[n - 1] == '/')
-		setting->document[n - 1] = '\0';
-
-	snprintf(path, sizeof(path) - 1, "%s%s", setting->document, url);
+	char* path = request->path;
 
 	struct stat st;
 			
 	if(stat(path, &st) < 0)
 	{
+		extern int errno;
+
 		conn->state = SEND_ERROR;
 		conn->errorCode = NOT_FOUND;
 			
+		LogError("stat() %s error: %s\n", strerror(errno));
+
 		return;
 	}
 
@@ -473,15 +508,9 @@ void doDir(struct httpConnection* conn)
 	assert(request != NULL);
 	
 	char* url = request->url;
-	char  path[256];
-	struct Setting* setting = server->setting;
-	assert(setting != NULL);
+	char path[256];
 
-	int n = strlen(setting->document);
-	if(setting->document[n - 1] == '/')
-		setting->document[n - 1] = '\0';
-
-	snprintf(path, sizeof(path) - 1, "%s/index.html", setting->document);
+	snprintf(path, sizeof(path) - 1, "%s/index.html", request->path);
 
 	struct stat st;
 			
@@ -527,7 +556,7 @@ void doCgi(struct httpConnection* conn)
 	assert(request != NULL);
 
 	if(	strcasecmp(request->method, "GET") != 0
-	 || strcasecmp(request->method, "POST") != 0)
+	 && strcasecmp(request->method, "POST") != 0)
 	{
 		conn->state = SEND_ERROR;
 		conn->errorCode = NOT_IMPLEMENTED;	
@@ -537,7 +566,7 @@ void doCgi(struct httpConnection* conn)
 	
 	char** env = makeEnv(conn);
 	char*  args[2];
-	args[0] = request->url;
+	args[0] = request->path;
 	args[1] = NULL;
 
 	int cgi_input[2];
@@ -569,6 +598,11 @@ void doCgi(struct httpConnection* conn)
 		close(cgi_input[1]);	
 		close(cgi_output[0]);
 
+		dup2(cgi_input[0], STDIN_FILENO);
+		dup2(cgi_output[1], STDOUT_FILENO);
+
+		execve(request->path, args, env);
+
 		exit(0);
 	}
 	
@@ -577,11 +611,17 @@ void doCgi(struct httpConnection* conn)
 
 	if(strcasecmp(request->method, "POST") == 0)
 		write(cgi_input[1], request->query, strlen(request->query));
-	
+
+	char buf[1024];
+	int n = read(cgi_output[0], buf, sizeof(buf) - 1);	
 	struct Buffer* output = conn->bevent->output;
 	assert(output != NULL);
 	
-	bufferRead(output, cgi_output[0]);
+	bufferPrintf(output, "%s 200 OK\r\n", HTTP_VERSION);
+	bufferPrintf(output, "Content-length: %d\r\n", n);
+	bufferAddStr(output, buf, n);
+
+//	bufferRead(output, cgi_output[0]);
 	conn->state = SEND_RESPONSE;	
 
 	free(env);
@@ -590,6 +630,10 @@ void doCgi(struct httpConnection* conn)
 void sendResponse(struct httpConnection* conn)
 {
 	assert(conn != NULL);
+
+#ifdef DEBUG
+	printf("send response.\n");
+#endif
 
 	struct BufferEvent* bevent = conn->bevent;
 	int sockfd = bevent->event->fd;
@@ -605,6 +649,8 @@ void sendResponse(struct httpConnection* conn)
 	
 		return;
 	}
+
+	conn->state = DISCONNECTED;
 }
 
 void sendError(struct httpConnection* conn)
@@ -612,7 +658,13 @@ void sendError(struct httpConnection* conn)
 	assert(conn != NULL);
 
 	int errorCode = conn->errorCode;
+
+#ifdef DEBUG
+	printf("send error: %s\n", errorCodes[conn->errorCode]);
+#endif
 	struct Buffer* output = conn->bevent->output;
+	assert(output != NULL);
+	
 	switch(errorCode)
 	{
 		case BAD_REQUEST:
@@ -801,9 +853,10 @@ struct httpConnection* newConnection(int sockfd, struct BufferEvent* bevent, 			
 	conn->bevent = bevent;
 	conn->server = server;
 	conn->loop = loop;
-	conn->state = PARSE_HEADER;
+	conn->state = PARSE_FIRSTLINE;
 	conn->request = (struct httpRequest*)malloc
 						(sizeof(struct httpRequest));
+	memset(conn->request, 0, sizeof(struct httpRequest));
 	assert(conn->request != NULL);
 
 	return conn;
@@ -811,7 +864,14 @@ struct httpConnection* newConnection(int sockfd, struct BufferEvent* bevent, 			
 
 void freeConnection(struct httpConnection* conn)
 {
-		
+	assert(conn != NULL);
+	
+	int sockfd = conn->sockfd;
+	server->connMap[sockfd] = NULL;
+	if(conn->request->path)
+		free(conn->request->path);
+	free(conn->request);
+	freeBufferEvent(conn->bevent);
 }
 
 void newHttpServer(int argc, char* argv[])
@@ -892,11 +952,11 @@ void startServer()
 			LogError("logfile chown() error: %s\n", strerror(errno));
 		}
 
-		if(chroot(setting->root) < 0)
+/*		if(chroot(setting->root) < 0)
 		{
 			LogError("chroot() error: %s\n", strerror(errno));
 			exit(0);
-		}
+		}*/
 	
 		LogDebug("now root = %s\n", setting->root);
 		
