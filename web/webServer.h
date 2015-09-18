@@ -38,6 +38,7 @@ struct httpRequest
 //first line
 	char* method;
 	char* url;
+	char* path;
 	char* query;
 	char* protocol;
 	char major;
@@ -65,6 +66,7 @@ struct httpConnection
 {
 	int sockfd;
 	struct BufferEvent* bevent;
+	struct BufferEvent* cevent;
 	time_t timeout;
 	struct EventLoop* loop;
 	struct httpServer* server;
@@ -73,8 +75,6 @@ struct httpConnection
 	struct httpRequest* request;
 	int errorCode;
 	
-	struct BufferEvent* cgi;
-
 	char remote[25];	
 };
 

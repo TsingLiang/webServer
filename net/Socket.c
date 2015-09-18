@@ -11,7 +11,7 @@
 
 #define DEBUG
 
-const int LISTENQ = 1024;
+static const int LISTENQ = 1024;
 
 int tcpListen(int port)
 {
@@ -20,6 +20,7 @@ int tcpListen(int port)
     assert(acceptor > 0);
    
 	setReuseAddr(acceptor, true);
+	setNonBlock(acceptor, true);
  
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET; 
@@ -70,7 +71,12 @@ int tcpAccept(int sockfd)
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
 
-    return accept(sockfd, (struct sockaddr*)&addr, &len);
+    int connfd = accept(sockfd, (struct sockaddr*)&addr, &len);
+	
+	if(connfd >= 0)
+		setNonBlock(connfd, true);
+
+	return connfd;
 }
 
 void setReuseAddr(int sockfd, bool on)

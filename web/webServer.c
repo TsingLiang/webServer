@@ -22,6 +22,8 @@
 //for response
 static const char* HTTP_VERSION = "HTTP/1.0";
 static const char* SERVER = "webServer/0.1 ubuntu/10.04 (linux)";
+static const char* HTML = "text/html";
+static const char* GIF = "gif";
 
 //for cgi
 static const char* CGI_PATH = "/usr/local/bin:/usr/bin";
@@ -33,7 +35,7 @@ static const char* GATEWAY_INTERFACE = "CGI/1.1";
 static const char* SERVER_PROTOCOL = "HTTP/1.0";
 static const char* AUTH_TYPE = "Basic";
 
-
+//state to string
 static const char* states[] = {
 								"disconnected"
 								, "connected"
@@ -48,6 +50,7 @@ static const char* states[] = {
 								, "send error"
 												};
 
+//errorCode to string
 static const char* errorCodes[] = {
 									  "http ok"
 									, "bad request"
@@ -59,9 +62,8 @@ static const char* errorCodes[] = {
 
 //connection map initial size
 static const int CONN_INIT_SIZE = 1024;
-//global variable
+//http server 
 static struct httpServer* server = NULL;
-
 
 static void daemonize();
 static void singleRun(const char* pidfile);
@@ -78,6 +80,7 @@ static void addGeneralHeader(struct httpConnection* conn);
 static void doFile(struct httpConnection* conn);
 static void doDir(struct httpConnection* conn);
 static void doCgi(struct httpConnection* conn);
+static void onCgi(struct BufferEvent* cevent, void* arg);
 static void sendResponse(struct httpConnection* conn);
 static void sendError(struct httpConnection* conn);
 static char** makeArg(struct httpConnection* conn);
@@ -95,7 +98,7 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 
 	assert(conn != NULL);
 
-	while(conn->state != DISCONNECTED)
+	while(conn->state != DISCONNECTED && conn->state != ON_CGI)
 	{
 
 #ifdef DEBUG
@@ -140,7 +143,13 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 		}
 	}
 	
-	freeConnection(conn);	
+	if(conn->state == DISCONNECTED)
+		freeConnection(conn);
+	
+#ifdef DEBUG
+	printf("connection state: %s\n", states[conn->state]);
+#endif	
+
 }
 
 void onConnection(struct BufferEvent* bevent, void* arg)
@@ -612,19 +621,33 @@ void doCgi(struct httpConnection* conn)
 	if(strcasecmp(request->method, "POST") == 0)
 		write(cgi_input[1], request->query, strlen(request->query));
 
-	char buf[1024];
-	int n = read(cgi_output[0], buf, sizeof(buf) - 1);	
-	struct Buffer* output = conn->bevent->output;
-	assert(output != NULL);
-	
-	bufferPrintf(output, "%s 200 OK\r\n", HTTP_VERSION);
-	bufferPrintf(output, "Content-length: %d\r\n", n);
-	bufferAddStr(output, buf, n);
+	conn->cevent = newBufferEvent(server->server->loop, cgi_output[0],
+								onCgi, NULL, conn);
+	enableRead(conn->cevent);
 
-//	bufferRead(output, cgi_output[0]);
-	conn->state = SEND_RESPONSE;	
-
+	close(cgi_input[1]);
 	free(env);
+
+	conn->state = ON_CGI;
+}
+
+void onCgi(struct BufferEvent* cevent, void* arg)
+{
+	assert(cevent != NULL);
+	
+	struct Buffer* input = cevent->input;
+
+	struct httpConnection* conn = (struct httpConnection*)arg;
+	struct Buffer* output = conn->bevent->output;
+	bufferPrintf(output, "%s 200 OK\r\n", HTTP_VERSION);
+	bufferPrintf(output, "Content-length: %d\r\n", 
+						input->windex- input->rindex);
+	bufferAddStr(output, input->buf, input->windex - input->rindex);
+	freeBufferEvent(cevent);
+
+	conn->state = SEND_RESPONSE;
+	
+	onRequest(conn->bevent, NULL);	
 }
 
 void sendResponse(struct httpConnection* conn)
@@ -872,6 +895,7 @@ void freeConnection(struct httpConnection* conn)
 		free(conn->request->path);
 	free(conn->request);
 	freeBufferEvent(conn->bevent);
+	free(conn);
 }
 
 void newHttpServer(int argc, char* argv[])

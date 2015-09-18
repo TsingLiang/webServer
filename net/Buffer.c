@@ -101,18 +101,32 @@ int bufferPrintf(struct Buffer* buffer, const char* fmt, ...)
 	va_start(p, fmt);
 
 	int n = vsnprintf(buffer->buf + buffer->windex, 
-					buffer->capacity - buffer->windex, fmt, p);	
+					buffer->capacity - buffer->windex, fmt, p);
+
+	if(n < 0)
+		return n;
+
+	buffer->windex += n;
+	
+	int sum = n;
+	
 	while(buffer->windex == buffer->capacity)
 	{
 		bufferExpand(buffer);
 
 		n = vsnprintf(buffer->buf + buffer->windex, 
 					buffer->capacity - buffer->windex, fmt, p);	
+		if(n < 0)
+			return n;
+
+		buffer->windex += n;
+
+		sum += n;
 	}
 
 	va_end(p);
 
-	return n;
+	return sum;
 }
 
 int bufferAddInt(struct Buffer* buffer, int n)
