@@ -429,9 +429,10 @@ void preResponse(struct httpConnection* conn)
 		return;
 	}
 
+//*.cgi || *.fcgi
 	char* p = path + strlen(path);
-	if(	*--p == 'i' && *--p == 'g' 
-	 && *--p == 'c' && *--p == '.')
+	if(	*--p == 'i' && *--p == 'g' && *--p == 'c' && 
+		(*--p == '.' || (*p == 'f' && *--p == '.')))
 	{
 		conn->state = DO_CGI;
 			
@@ -563,6 +564,7 @@ void doCgi(struct httpConnection* conn)
 	
 	struct httpRequest* request = conn->request;
 	assert(request != NULL);
+	struct Setting* setting = server->setting;
 
 	if(	strcasecmp(request->method, "GET") != 0
 	 && strcasecmp(request->method, "POST") != 0)
@@ -577,6 +579,74 @@ void doCgi(struct httpConnection* conn)
 	char*  args[2];
 	args[0] = request->path;
 	args[1] = NULL;
+
+    if(setting->usefcgi)
+    {
+		char ip[25];
+		int  port;
+		bool error = false;
+		int i; 
+		for(i = 0; i < setting->size; i++)
+		{
+			int len = strlen(setting->location[i].file);
+			if(strncmp(setting->location[i].file, request->path, len) == 0)
+			{
+				if(sscanf(setting->location[i].ipport, 
+							"%s : %d", ip, &port) < 0)
+					error = true;
+				break;
+			}
+		}
+
+		if(error || i == setting->size)
+		{
+			conn->state = SEND_ERROR;
+			conn->errorCode = INTERNAL_ERROR;
+	
+			free(env);
+
+			return;
+		}
+
+#ifdef DEBUG
+		printf("ip = %s, port = %d\n", ip, port);
+#endif
+		int cgifd = tcpConnect(ip, port);
+		if(cgifd < 0)
+		{
+			conn->state = SEND_ERROR;
+			conn->errorCode = INTERNAL_ERROR;
+	
+			free(env);
+
+			return;
+		}
+		struct Buffer* output = newBuffer();
+		for(i = 0; i < 50; i++)
+		{
+			if(env[i] == NULL)
+				break;
+			bufferAddStr(output, env[i], strlen(env[i]));
+			bufferAddStr(output, "\n", 1);
+		}
+
+		write(cgifd, output->buf, output->windex - output->rindex);
+		freeBuffer(output);
+
+ 		if(strcasecmp(request->method, "POST") == 0)
+			write(cgifd, request->query, strlen(request->query));
+	
+		conn->cevent = newBufferEvent(server->server->loop, cgifd,
+								onCgi, NULL, conn);
+		enableRead(conn->cevent);
+	
+		for(i = 0; i < 50; i++)
+        	free(env[i]);
+		free(env);
+        conn->state = ON_CGI;
+			
+		return ;
+    }
 
 	int cgi_input[2];
 	int cgi_output[2];
@@ -646,7 +716,7 @@ void onCgi(struct BufferEvent* cevent, void* arg)
 	freeBufferEvent(cevent);
 
 	conn->state = SEND_RESPONSE;
-	
+		
 	onRequest(conn->bevent, NULL);	
 }
 
@@ -882,6 +952,8 @@ struct httpConnection* newConnection(int sockfd, struct BufferEvent* bevent, 			
 	memset(conn->request, 0, sizeof(struct httpRequest));
 	assert(conn->request != NULL);
 
+	getPeerAddr(sockfd, conn->remote, sizeof(conn->remote));
+
 	return conn;
 }
 
@@ -1104,5 +1176,3 @@ void singleRun(const char* pidfile)
 	snprintf(buf, sizeof(buf), "%ld", (long)getpid());
 	write(fd, buf, strlen(buf));
 }
-
-

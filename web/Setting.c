@@ -118,6 +118,7 @@ struct Setting* parseOpt(int argc, char* argv[])
 	{
 		setting = (struct Setting*)malloc(sizeof(struct Setting));
 		assert(setting != NULL);
+		memset(setting, 0, sizeof(struct Setting));
 
 		if(root)
 			setting->root = root;
@@ -252,7 +253,55 @@ struct Setting* parseConf(const char* conf)
 		setting->listen = 80;
 		setting->nthreads = 4;
 		setting->daemon = true;
-	}	
+	}
+
+	cJSON* fcgi = cJSON_GetObjectItem(webServer, "fcgi");
+	if(fcgi != NULL)
+	{
+		cJSON* usefcgi = cJSON_GetObjectItem(fcgi, "usefcgi");
+		if(usefcgi != NULL)
+			setting->usefcgi = usefcgi->type == 1 ? true : false;
+		else
+			setting->usefcgi = false;
+
+		cJSON* dir = cJSON_GetObjectItem(fcgi, "dir");
+		if(dir != NULL)
+			setting->dir = strdup(dir->valuestring);
+		else
+			setting->dir = strdup("fcgi");
+
+		cJSON* index = cJSON_GetObjectItem(fcgi, "index");
+		if(index != NULL)
+			setting->index = strdup(index->valuestring);
+		else
+			setting->index = strdup("index.fcgi");
+
+		cJSON* fcgi_location = cJSON_GetObjectItem(fcgi, "fcgi_location");
+		if(fcgi_location != NULL)
+		{
+			setting->size = cJSON_GetArraySize(fcgi_location);
+			setting = realloc(setting, sizeof(struct Setting) + 
+							setting->size * sizeof(struct fcgi_location));
+			assert(setting != NULL);
+
+			cJSON* location;
+			cJSON* file;
+			cJSON* ipport;
+			int i;
+			for(i = 0; i < setting->size; i++)
+			{
+				location = cJSON_GetArrayItem(fcgi_location, i);
+				assert(location != NULL);
+
+				file = cJSON_GetObjectItem(location, "file");
+				ipport = cJSON_GetObjectItem(location, "ipport");
+				assert(file != NULL && ipport != NULL);
+
+				setting->location[i].file = strdup(file->valuestring);
+				setting->location[i].ipport = strdup(ipport->valuestring);
+			}
+		}
+	}
 
 	close(fd);
 	cJSON_Delete(webServer);

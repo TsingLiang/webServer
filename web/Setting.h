@@ -3,6 +3,12 @@
 
 #include <stdbool.h>
 
+struct fcgi_location
+{
+	char* file;
+	char* ipport;
+};
+
 struct Setting
 {
 	char* root;
@@ -15,7 +21,14 @@ struct Setting
 	char* serverName;		
 	int  listen;
 	int  nthreads;
-	bool daemon;	
+	bool daemon;
+
+	//fcgi
+	bool  usefcgi;
+	char* dir;
+	char* index;
+	int   size;
+	struct fcgi_location location[0];
 };
 
 struct Setting* parseOpt(int argc, char* argv[]);
