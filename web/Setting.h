@@ -2,6 +2,7 @@
 #define SETTING_H
 
 #include <stdbool.h>
+#include <time.h>
 
 struct fcgi_location
 {
@@ -18,10 +19,17 @@ struct Setting
 	char* logFile;
 	int   logLevel;
 
+	//server
 	char* serverName;		
 	int  listen;
 	int  nthreads;
 	bool daemon;
+
+	//cache
+	bool usecache;
+	int tablesize;
+	time_t html;//msecond
+	time_t cgi;
 
 	//fcgi
 	bool  usefcgi;

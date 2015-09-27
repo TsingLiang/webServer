@@ -18,6 +18,7 @@
 #include "webServer.h"
 #include "Setting.h"
 #include "Logger.h"
+#include "ConcurrentHashMap.h"
 
 //for response
 static const char* HTTP_VERSION = "HTTP/1.0";
@@ -145,11 +146,8 @@ static void onRequest(struct BufferEvent* bevent, void* arg)
 	
 	if(conn->state == DISCONNECTED)
 		freeConnection(conn);
-	
-#ifdef DEBUG
-	printf("connection state: %s\n", states[conn->state]);
-#endif	
 
+	printf("connection over.\n");
 }
 
 void onConnection(struct BufferEvent* bevent, void* arg)
@@ -484,6 +482,36 @@ void doFile(struct httpConnection* conn)
 		return;
 	}
 
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+	printf("do file cache.\n");
+	if(setting->usecache)
+	{
+		time_t now = time(NULL);
+		printf("get() html cache %s.\n", request->path);
+		struct Item* item = get(server->map, request->path);
+		printf("get() html cache %s over.\n", request->path);
+		if(item != NULL)
+		{
+			//expire
+			if(now > item->expire)
+			{
+				printf("html cache %s expire.\n", request->path);
+				rm(server->map, request->path);	
+			}
+			else
+			{
+				printf("html cache %s ok.\n", request->path);
+				bufferAddStr(conn->bevent->output, item->value, 
+								strlen(item->value));
+				conn->state = SEND_RESPONSE;
+
+				return;
+			}
+		}
+	}
+	printf("do file cache over.\n");
+
 	int fd = open(path, O_RDONLY);
 	if(fd < 0)
 	{
@@ -506,6 +534,13 @@ void doFile(struct httpConnection* conn)
 	bufferRead(output, fd);
 	
 	close(fd);	
+
+	if(setting->usecache)
+	{
+		printf("put html cache.\n");
+		put(server->map, request->path, output->buf, 
+					time(NULL) + setting->html);
+	}
 
 	conn->state = SEND_RESPONSE;
 }
@@ -532,6 +567,32 @@ void doDir(struct httpConnection* conn)
 		return;
 	}
 
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+	if(setting->usecache)
+	{
+		time_t now = time(NULL);
+		struct Item* item = get(server->map, request->path);
+		if(item != NULL)
+		{
+			//expire
+			if(now > item->expire)
+			{
+				printf("html cache %s expire.\n", request->path);
+				rm(server->map, request->path);	
+			}
+			else
+			{
+				printf("html cache %s ok.\n", request->path);
+				bufferAddStr(conn->bevent->output, item->value, 
+								strlen(item->value));
+				conn->state = SEND_RESPONSE;
+
+				return;
+			}
+		}
+	}
+
 	int fd = open(path, O_RDONLY);
 	if(fd < 0)
 	{
@@ -555,6 +616,13 @@ void doDir(struct httpConnection* conn)
 	
 	close(fd);	
 
+	if(setting->usecache)
+	{
+		printf("put html cache.\n");
+		put(server->map, request->path, output->buf, 
+					time(NULL) + setting->html);
+	}
+
 	conn->state = SEND_RESPONSE;	
 }
 
@@ -574,13 +642,36 @@ void doCgi(struct httpConnection* conn)
 		
 		return;
 	}
+	if(setting->usecache)
+	{
+		time_t now = time(NULL);
+		struct Item* item = get(server->map, request->path);
+		if(item != NULL)
+		{
+			//expire
+			if(now > item->expire)
+			{
+				rm(server->map, request->path);	
+			}
+			else
+			{
+				bufferAddStr(conn->bevent->output, item->value, 
+								strlen(item->value));
+				conn->state = SEND_RESPONSE;
+
+				return;
+			}
+		}
+	}
 	
 	char** env = makeEnv(conn);
 	char*  args[2];
 	args[0] = request->path;
 	args[1] = NULL;
 
-    if(setting->usefcgi)
+	char* p = request->path + strlen(request->path);
+    if(setting->usefcgi && *--p == 'i' && *--p == 'g' 
+		&& *--p == 'c' && *--p == 'f' && *--p == '.')
     {
 		char ip[25];
 		int  port;
@@ -616,7 +707,14 @@ void doCgi(struct httpConnection* conn)
 		{
 			conn->state = SEND_ERROR;
 			conn->errorCode = INTERNAL_ERROR;
-	
+
+			for(i = 0; i < 50; i++)
+			{
+				if(!env[i])
+					break;
+        		
+				free(env[i]);
+			}
 			free(env);
 
 			return;
@@ -635,14 +733,24 @@ void doCgi(struct httpConnection* conn)
 
  		if(strcasecmp(request->method, "POST") == 0)
 			write(cgifd, request->query, strlen(request->query));
-	
+
 		conn->cevent = newBufferEvent(server->server->loop, cgifd,
 								onCgi, NULL, conn);
+		printf("cevent enable read.\n");
 		enableRead(conn->cevent);
-	
+		printf("cevent enable read over.\n");
+
+		printf("free env.\n");
 		for(i = 0; i < 50; i++)
+		{
+			if(!env[i])
+				break;
+
         	free(env[i]);
+		}
 		free(env);
+		printf("free env over.\n");
+
         conn->state = ON_CGI;
 			
 		return ;
@@ -656,6 +764,14 @@ void doCgi(struct httpConnection* conn)
 		conn->state = SEND_ERROR;
 		conn->errorCode = INTERNAL_ERROR;
 	
+		int i;
+		for(i = 0; i < 50; i++)
+		{
+			if(!env[i])
+				break;
+
+        	free(env[i]);
+		}
 		free(env);
 
 		return;
@@ -666,7 +782,15 @@ void doCgi(struct httpConnection* conn)
 	{
 		conn->state = SEND_ERROR;
 		conn->errorCode = INTERNAL_ERROR;
-	
+
+		int i;
+		for(i = 0; i < 50; i++)
+		{
+			if(!env[i])
+				break;
+
+        	free(env[i]);
+		}
 		free(env);
 
 		return ;
@@ -696,6 +820,15 @@ void doCgi(struct httpConnection* conn)
 	enableRead(conn->cevent);
 
 	close(cgi_input[1]);
+
+	int i;
+	for(i = 0; i < 50; i++)
+	{
+		if(!env[i])
+			break;
+
+       	free(env[i]);
+	}
 	free(env);
 
 	conn->state = ON_CGI;
@@ -714,6 +847,19 @@ void onCgi(struct BufferEvent* cevent, void* arg)
 						input->windex- input->rindex);
 	bufferAddStr(output, input->buf, input->windex - input->rindex);
 	freeBufferEvent(cevent);
+	
+	struct Setting* setting = server->setting;
+	assert(setting != NULL);
+	if(setting->usecache)
+	{
+		printf("put() cgi to cache.\n");
+		struct httpRequest* request = conn->request;
+		assert(request != NULL);
+	
+		output->buf[output->windex] = '\0';
+		put(server->map, request->path, output->buf, 
+					time(NULL) + setting->cgi);
+	}
 
 	conn->state = SEND_RESPONSE;
 		
@@ -727,13 +873,15 @@ void sendResponse(struct httpConnection* conn)
 #ifdef DEBUG
 	printf("send response.\n");
 #endif
-
+	
 	struct BufferEvent* bevent = conn->bevent;
 	int sockfd = bevent->event->fd;
 	assert(sockfd >= 0);
 	
 	struct Buffer* output = bevent->output;
 	
+	printf("%s\n", output->buf);
+
 	bufferWrite(output, sockfd);
 	
 	if(output->rindex < output->windex)
@@ -863,6 +1011,7 @@ char** makeEnv(struct httpConnection* conn)
 
 	char** env = (char**)malloc(50 * sizeof(char*));
 	assert(env != NULL);
+	memset(env, 0, sizeof(50 * sizeof(char*)));
 
 	int envn = 0;
 	char buf[1024];
@@ -977,6 +1126,10 @@ void newHttpServer(int argc, char* argv[])
 
 	server->setting = parseOpt(argc, argv);
 	assert(server->setting != NULL);
+	if(server->setting->usecache)
+	{
+		server->map = newMap(server->setting->tablesize);
+	}
 
 	logOpen(server->setting->logFile, server->setting->logLevel);
 

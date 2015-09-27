@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
 static unsigned time33(const char* key, size_t len)
 {
@@ -85,9 +86,12 @@ void rm(struct ConcurrentHashMap* map, const char* key)
 	}
 	pthread_mutex_unlock(map->mutex);
 
-	free(item->key);
-	free(item->value);
-	free(item);
+	if(item != NULL)
+	{
+		free(item->key);
+		free(item->value);
+		free(item);
+	}
 }
 struct Item* get(struct ConcurrentHashMap* map, const char* key)
 {
@@ -102,8 +106,12 @@ struct Item* get(struct ConcurrentHashMap* map, const char* key)
 	{
 		if(strcmp(item->key, key) == 0)
 		{
+			pthread_mutex_unlock(map->mutex);
+
 			return item;
 		}
 	}
 	pthread_mutex_unlock(map->mutex);
+
+	return NULL;
 }

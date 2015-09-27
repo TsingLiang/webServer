@@ -255,6 +255,34 @@ struct Setting* parseConf(const char* conf)
 		setting->daemon = true;
 	}
 
+	cJSON* cache = cJSON_GetObjectItem(webServer, "cache");
+	if(cache != NULL)
+	{
+		cJSON* usecache = cJSON_GetObjectItem(cache, "usecache");
+		if(usecache != NULL)
+			setting->usecache = usecache->type == 1 ? true : false;
+		else
+			setting->usecache = false;
+
+		cJSON* tablesize = cJSON_GetObjectItem(cache, "tablesize");
+		if(tablesize != NULL)
+			setting->tablesize = tablesize->valueint;
+		else
+			setting->tablesize = 1024;
+
+		cJSON* html = cJSON_GetObjectItem(cache, "html");
+		if(html != NULL)
+			setting->html = html->valueint;
+		else
+			setting->html = 100000;//100seconds
+
+		cJSON* cgi = cJSON_GetObjectItem(cache, "cgi");
+		if(cgi != NULL)
+			setting->cgi = cgi->valueint;
+		else
+			setting->cgi = 10000;//10seconds
+	}
+
 	cJSON* fcgi = cJSON_GetObjectItem(webServer, "fcgi");
 	if(fcgi != NULL)
 	{

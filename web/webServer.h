@@ -78,6 +78,8 @@ struct httpConnection
 	char remote[25];	
 };
 
+struct ConcurrentHashMap;
+
 struct httpServer
 {
 	int acceptor;
@@ -87,6 +89,8 @@ struct httpServer
 	struct httpConnection** connMap;
 	int mapSize;
 
+	struct ConcurrentHashMap* map;
+	
 	struct Setting* setting;
 };
 
